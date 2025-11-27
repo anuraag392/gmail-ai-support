@@ -1,102 +1,151 @@
 import base64
-import os.path
-from email.mime.text import MIMEText
+from email.message import EmailMessage
+from typing import List, Dict
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+import streamlit as st
 from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
-from app.config.config import CREDENTIALS_FILE, TOKEN_FILE, GMAIL_USER
-
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+from app.database.db import get_user_tokens, save_user_tokens
 
 
-def get_service():
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+def _build_creds_for_user(user_id: str) -> Credentials:
+    row = get_user_tokens(user_id)
+    if not row:
+        raise RuntimeError(f"No tokens found for user {user_id}. Please log in again.")
+
+    scopes = st.secrets["GMAIL_SCOPES"].split(",")
+
+    creds = Credentials(
+        token=row["access_token"],
+        refresh_token=row["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=st.secrets["GOOGLE_CLIENT_ID"],
+        client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
+        scopes=scopes,
+    )
+
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            # Save refreshed tokens
+            save_user_tokens(
+                user_id=user_id,
+                access=creds.token,
+                refresh=creds.refresh_token,
+                expiry=str(creds.expiry),
+                token_type=creds.token_uri,
+                scope=",".join(scopes),
+            )
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
+            raise RuntimeError("Invalid Gmail credentials and cannot refresh.")
 
+    return creds
+
+
+def get_gmail_service_for_user(user_id: str):
+    creds = _build_creds_for_user(user_id)
     service = build("gmail", "v1", credentials=creds)
     return service
 
 
-def list_unread_messages(service, max_results=10):
-    response = service.users().messages().list(
-        userId="me", labelIds=["INBOX", "UNREAD"], maxResults=max_results
-    ).execute()
-    messages = response.get("messages", [])
-    return messages
+def _extract_header(headers, name: str, default: str = "") -> str:
+    for h in headers:
+        if h.get("name", "").lower() == name.lower():
+            return h.get("value", default)
+    return default
 
 
-def get_message_details(service, msg_id):
-    msg = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
-
-    headers = msg.get("payload", {}).get("headers", [])
-    subject = next((h["value"] for h in headers if h["name"] == "Subject"), "")
-    from_email = next((h["value"] for h in headers if h["name"] == "From"), "")
-
-    body = ""
-    payload = msg.get("payload", {})
-    if "parts" in payload:
-        for part in payload["parts"]:
-            if part.get("mimeType") == "text/plain":
-                data = part["body"].get("data")
-                if data:
-                    body = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
-                    break
-    else:
-        data = payload.get("body", {}).get("data")
+def _get_message_body(payload) -> str:
+    """
+    Extract plain text body from Gmail message payload.
+    Tries text/plain first, falls back to snippet.
+    """
+    if "body" in payload and payload.get("mimeType", "").startswith("text/"):
+        data = payload["body"].get("data")
         if data:
-            body = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+            return base64.urlsafe_b64decode(data).decode(errors="ignore")
 
-    return {
-        "id": msg_id,
-        "subject": subject,
-        "from": from_email,
-        "body": body,
-    }
+    parts = payload.get("parts", [])
+    for part in parts:
+        if part.get("mimeType") == "text/plain":
+            data = part["body"].get("data")
+            if data:
+                return base64.urlsafe_b64decode(data).decode(errors="ignore")
 
-
-def create_message(to, subject, body_text):
-    message = MIMEText(body_text)
-    message["to"] = to
-    message["from"] = GMAIL_USER
-    message["subject"] = subject
-    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    return {"raw": raw}
+    # Fallback: return empty string; caller can use snippet if needed
+    return ""
 
 
-def send_message(service, message):
-    sent = (
-        service.users()
-        .messages()
-        .send(userId="me", body=message)
-        .execute()
-    )
-    return sent
+def fetch_unread_emails_for_user(user_id: str, max_results: int = 10) -> List[Dict]:
+    """
+    Fetch unread, non-promotions, non-social emails from INBOX for the given user.
+    Returns a list of dicts with: gmail_msg_id, from_email, subject, body
+    """
+    service = get_gmail_service_for_user(user_id)
 
-
-def mark_as_read(service, msg_id):
-    service.users().messages().modify(
-        userId="me",
-        id=msg_id,
-        body={"removeLabelIds": ["UNREAD"]},
-    ).execute()
-def list_recent_messages(service, minutes=5, max_results=20):
-    query = f"newer_than:{minutes}m"
-    response = service.users().messages().list(
+    query = "in:inbox is:unread -category:promotions -category:social"
+    resp = service.users().messages().list(
         userId="me",
         q=query,
-        labelIds=["INBOX"],
         maxResults=max_results
     ).execute()
-    return response.get("messages", [])
+
+    messages = resp.get("messages", [])
+    results = []
+
+    if not messages:
+        return results
+
+    for meta in messages:
+        msg_id = meta["id"]
+        msg = service.users().messages().get(
+            userId="me",
+            id=msg_id,
+            format="full"
+        ).execute()
+
+        payload = msg.get("payload", {})
+        headers = payload.get("headers", [])
+
+        subject = _extract_header(headers, "Subject", "(no subject)")
+        from_raw = _extract_header(headers, "From", "")
+
+        # Extract email from "Name <email@domain>" format
+        from_email = from_raw
+        if "<" in from_raw and ">" in from_raw:
+            from_email = from_raw.split("<")[-1].split(">")[0].strip()
+
+        # Skip no-reply style addresses
+        lowered = from_email.lower()
+        if any(tag in lowered for tag in ["noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon"]):
+            continue
+
+        body = _get_message_body(payload)
+        if not body:
+            body = msg.get("snippet", "")
+
+        results.append(
+            {
+                "gmail_msg_id": msg_id,
+                "from_email": from_email,
+                "subject": subject,
+                "body": body,
+            }
+        )
+
+    return results
+
+
+def create_reply_message(to: str, subject: str, body_text: str) -> dict:
+    """
+    Build a Gmail API message object (base64-encoded) ready to send.
+    """
+    message = EmailMessage()
+    message["To"] = to
+    message["Subject"] = subject
+    message.set_content(body_text)
+
+    encoded = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    return {"raw": encoded}

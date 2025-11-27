@@ -3,6 +3,7 @@ import streamlit as st
 from app.database.db import (
     init_db,
     get_pending_emails_for_user,
+    log_email,
     update_email_status,
     get_email_log_by_id
 )
@@ -11,6 +12,7 @@ from app.backend.gmail.gmail_client import get_service, create_message, send_mes
 from app.config.config import GMAIL_USER
 from app.database.db import get_pending_emails_for_user
 from app.backend.gmail.gmail_client import get_service, create_message, send_message
+from app.backend.gmail.gmail_client import fetch_unread_emails_for_user, create_reply_message
 
 
 def main():
@@ -26,6 +28,29 @@ def main():
         st.stop()
 
     st.write(f"Logged in as: **{current_user}**")
+    
+    if st.button("🔄 Fetch latest unread emails from Gmail"):
+        try:
+            emails = fetch_unread_emails_for_user(current_user, max_results=10)
+            if not emails:
+                st.info("No new unread emails found.")
+            else:
+                for e in emails:
+                    log_email(
+                        user_id=current_user,
+                        gmail_msg_id=e["gmail_msg_id"],
+                        from_email=e["from_email"],
+                        subject=e["subject"],
+                        body=e["body"],
+                        category="new",
+                        suggested_reply="",
+                        status="pending",
+                    )
+                st.success(f"Fetched and stored {len(emails)} emails.")
+            st.rerun()
+        except Exception as ex:
+            st.error(f"Error fetching emails: {ex}")
+    
 
     pending = get_pending_emails_for_user(current_user)
 
