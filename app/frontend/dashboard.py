@@ -8,10 +8,9 @@ from app.database.db import (
     get_email_log_by_id
 )
 
-from app.backend.gmail.gmail_client import get_service, create_message, send_message
+from app.backend.gmail.gmail_client import get_gmail_service_for_user, create_reply_message, send_message
 from app.config.config import GMAIL_USER
 from app.database.db import get_pending_emails_for_user
-from app.backend.gmail.gmail_client import get_service, create_message, send_message
 from app.backend.gmail.gmail_client import fetch_unread_emails_for_user, create_reply_message
 
 
@@ -60,7 +59,7 @@ def main():
 
     st.write(f"Pending emails: **{len(pending)}**")
 
-    service = get_service()
+    service = get_gmail_service_for_user()
 
     for row in pending:
         with st.expander(f"[{row['id']}] {row['from_email']} — {row['subject']}"):
@@ -79,7 +78,7 @@ def main():
             with col1:
                 if st.button("✅ Approve & Send", key=f"send_{row['id']}"):
                     try:
-                        msg = create_message(
+                        msg = create_reply_message(
                             to=row["from_email"],
                             subject=f"Re: {row['subject']}",
                             body_text=reply_text,

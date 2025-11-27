@@ -149,3 +149,16 @@ def create_reply_message(to: str, subject: str, body_text: str) -> dict:
 
     encoded = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {"raw": encoded}
+def send_message(user_id: str, message: dict):
+    """
+    Sends an email through Gmail for the given user.
+    message must be a dict: { "raw": base64_string }
+    """
+    service = get_gmail_service_for_user(user_id)
+    sent = (
+        service.users()
+        .messages()
+        .send(userId="me", body=message)
+        .execute()
+    )
+    return sent
