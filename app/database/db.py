@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from app.config.settings import DB_FILE
+from app.config.config import DB_FILE
 from app.database.schema import create_all_tables
 
 
