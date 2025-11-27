@@ -3,3 +3,5 @@ token.json
 *.pem
 *.key
 *.db
+.env
+__pycache__/
