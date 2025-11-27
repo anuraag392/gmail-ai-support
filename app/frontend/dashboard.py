@@ -1,6 +1,12 @@
 import streamlit as st
 
-from app.database.db import init_db, get_pending_emails, update_email_status, get_email_log_by_id
+from app.database.db import (
+    init_db,
+    get_pending_emails_for_user,
+    update_email_status,
+    get_email_log_by_id
+)
+
 from app.backend.gmail.gmail_client import get_service, create_message, send_message
 from app.config.config import GMAIL_USER
 from app.database.db import get_pending_emails_for_user
@@ -21,7 +27,7 @@ def main():
 
     st.write(f"Logged in as: **{current_user}**")
 
-    pending = get_pending_emails(current_user)
+    pending = get_pending_emails_for_user(current_user)
 
     if not pending:
         st.info("No pending emails. Worker hasn't logged anything yet.")
