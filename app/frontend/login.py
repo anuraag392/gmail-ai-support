@@ -9,4 +9,4 @@ def main():
     if st.button("Login as Test User"):
         st.session_state["user_id"] = "test_user_123"
         st.success("You are logged in!")
-        st.experimental_rerun()
+        st.rerun()
