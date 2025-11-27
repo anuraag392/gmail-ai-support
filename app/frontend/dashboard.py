@@ -12,7 +12,7 @@ from app.backend.gmail.gmail_client import get_gmail_service_for_user, create_re
 from app.config.config import GMAIL_USER
 from app.database.db import get_pending_emails_for_user
 from app.backend.gmail.gmail_client import fetch_unread_emails_for_user, create_reply_message
-
+from app.backend.ai.ai_client import categorize_email, generate_reply
 
 def main():
     
@@ -35,16 +35,20 @@ def main():
                 st.info("No new unread emails found.")
             else:
                 for e in emails:
+                    category = categorize_email(e["subject"], e["body"])
+                    ai_reply = generate_reply(category, e["subject"], e["body"], e["from_email"])
+
                     log_email(
                         user_id=current_user,
                         gmail_msg_id=e["gmail_msg_id"],
                         from_email=e["from_email"],
                         subject=e["subject"],
                         body=e["body"],
-                        category="new",
-                        suggested_reply="",
+                        category=category,
+                        suggested_reply=ai_reply,
                         status="pending",
                     )
+                
                 st.success(f"Fetched and stored {len(emails)} emails.")
             st.rerun()
         except Exception as ex:
@@ -65,13 +69,15 @@ def main():
         with st.expander(f"[{row['id']}] {row['from_email']} — {row['subject']}"):
             st.subheader("Incoming Email")
             st.code(row["body"] or "", language="text")
+            
+            st.info(f"📌 Category: **{row['category']}**")
 
+        # --- AI Suggested Reply ---
             st.subheader("AI Suggested Reply")
-            reply_text = st.text_area(
-                "Edit reply (optional)",
-                value=row["suggested_reply"] or "",
-                key=f"reply_{row['id']}",
-                height=200,
+            ai_reply = st.text_area(
+                "Edit the AI reply before sending:",
+                row["suggested_reply"],
+                height=200
             )
 
             col1, col2 = st.columns(2)
@@ -81,9 +87,9 @@ def main():
                         msg = create_reply_message(
                             to=row["from_email"],
                             subject=f"Re: {row['subject']}",
-                            body_text=reply_text,
+                            body_text=ai_reply,
                         )
-                        send_message(service, msg)
+                        send_message(current_user, msg)
                         update_email_status(row["id"], "sent")
                         st.success("Reply sent and status updated to 'sent'.")
                         st.rerun()

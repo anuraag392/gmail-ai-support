@@ -8,7 +8,7 @@ from app.backend.gmail.gmail_client import (
     get_message_details,
     mark_as_read
 )
-from app.backend.ai.llm_client import classify_email, generate_reply
+from app.backend.ai.ai_client import classify_email, generate_reply
 from app.backend.erp.erp_client import get_customer_data_from_erp
 from store import load_processed_ids, save_processed_ids
 from app.database.db import init_db, log_email
