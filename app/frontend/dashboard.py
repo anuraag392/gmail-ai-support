@@ -59,7 +59,7 @@ def main():
 
     st.write(f"Pending emails: **{len(pending)}**")
 
-    service = get_gmail_service_for_user()
+    service = get_gmail_service_for_user(current_user)
 
     for row in pending:
         with st.expander(f"[{row['id']}] {row['from_email']} — {row['subject']}"):
