@@ -4,6 +4,7 @@ import streamlit as st
 from app.frontend.dashboard import main as dashboard_page
 from app.frontend.login import main as login_page
 from app.frontend.settings import main as settings_page
+from app.database.db import init_db
 
 # Streamlit app config
 st.set_page_config(
@@ -12,6 +13,7 @@ st.set_page_config(
 )
 
 def main():
+    init_db()
     st.sidebar.title("📌 Navigation")
 
     page = st.sidebar.radio(

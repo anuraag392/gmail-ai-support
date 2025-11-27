@@ -17,5 +17,5 @@ POLL_INTERVAL_SECONDS = 60  # time between checks
 CREDENTIALS_FILE = "credentials.json"      # from Google Cloud (Gmail API)
 TOKEN_FILE = "token.json"                  # created after first auth
 PROCESSED_IDS_FILE = "processed_ids.json"
-DB_FILE = "support.db"
+DB_FILE = "app/database/database.db"
 
