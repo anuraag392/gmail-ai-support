@@ -22,17 +22,29 @@ def init_db():
 # -----------------------------------
 # EMAIL LOGS
 # -----------------------------------
-def log_email(user_id, gmail_msg_id, from_email, subject, body, category, suggested_reply, status):
+def log_email(user_id, gmail_msg_id, from_email, subject, body,
+              category, confidence, is_legit_company, sender_domain,
+              reason, suggested_reply, status):
+
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute(
         """
-        INSERT INTO email_logs 
-        (user_id, gmail_msg_id, from_email, subject, body, category, suggested_reply, status, created_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO email_logs
+        (user_id, gmail_msg_id, from_email, subject, body,
+         category, confidence, is_legit_company, sender_domain, reason,
+         suggested_reply, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         """,
-        (user_id, gmail_msg_id, from_email, subject, body, category, suggested_reply, status)
+        (
+            user_id, gmail_msg_id, from_email, subject, body,
+            category, confidence, 1 if is_legit_company else 0,
+            sender_domain, reason,
+            suggested_reply, status
+        )
     )
+
     conn.commit()
     conn.close()
 

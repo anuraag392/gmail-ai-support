@@ -25,19 +25,23 @@ def create_all_tables(conn):
 
     # Email logs table
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS email_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            gmail_msg_id TEXT,
-            from_email TEXT,
-            subject TEXT,
-            body TEXT,
-            category TEXT,
-            suggested_reply TEXT,
-            status TEXT,
-            created_at TEXT,
-            sent_at TEXT
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS email_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        gmail_msg_id TEXT,
+        from_email TEXT,
+        subject TEXT,
+        body TEXT,
+        category TEXT,
+        confidence REAL,
+        is_legit_company INTEGER,
+        sender_domain TEXT,
+        reason TEXT,
+        suggested_reply TEXT,
+        status TEXT,
+        created_at TEXT,
+        sent_at TEXT
+    );
+""")
 
     conn.commit()

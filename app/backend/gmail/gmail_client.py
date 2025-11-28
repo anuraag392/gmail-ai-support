@@ -6,6 +6,7 @@ import streamlit as st
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from app.backend.ai.ai_client import categorize_email
 
 from app.database.db import get_user_tokens, save_user_tokens
 
@@ -83,6 +84,7 @@ def fetch_unread_emails_for_user(user_id: str, max_results: int = 10) -> List[Di
     Fetch unread, non-promotions, non-social emails from INBOX for the given user.
     Returns a list of dicts with: gmail_msg_id, from_email, subject, body
     """
+    
     service = get_gmail_service_for_user(user_id)
 
     query = "in:inbox is:unread -category:promotions -category:social"
@@ -116,6 +118,9 @@ def fetch_unread_emails_for_user(user_id: str, max_results: int = 10) -> List[Di
         from_email = from_raw
         if "<" in from_raw and ">" in from_raw:
             from_email = from_raw.split("<")[-1].split(">")[0].strip()
+        else:
+            from_email = from_raw
+        sender_domain = from_email.split("@")[-1].lower() if "@" in from_email else ""
 
         # Skip no-reply style addresses
         lowered = from_email.lower()
@@ -126,12 +131,30 @@ def fetch_unread_emails_for_user(user_id: str, max_results: int = 10) -> List[Di
         if not body:
             body = msg.get("snippet", "")
 
+        ai_result = categorize_email(
+            subject=subject,
+            body=body,
+            sender=from_email
+        )
+
+        category = ai_result["category"]
+        confidence = ai_result["confidence"]
+        is_legit = ai_result["is_legit_company"]
+        domain = ai_result["detected_sender_domain"]
+        reason = ai_result["reason"]
+
+        # ---- Add result to output ----
         results.append(
             {
                 "gmail_msg_id": msg_id,
                 "from_email": from_email,
                 "subject": subject,
                 "body": body,
+                "category": category,
+                "confidence": confidence,
+                "is_legit": is_legit,
+                "domain": domain,
+                "reason": reason,
             }
         )
 
