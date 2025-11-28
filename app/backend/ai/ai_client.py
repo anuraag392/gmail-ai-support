@@ -9,93 +9,60 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 
 def categorize_email(subject, body, sender):
     prompt = f"""
-You are an advanced email classification AI. Your task is to categorize emails with extremely high accuracy.
+You are an advanced classification AI. Return STRICT JSON only.
 
-FIRST, clean the message:
-- remove signatures
-- remove quoted replies
-- remove forwarding history
-- ignore disclaimers
-- focus on the actual intent
+Your job:
+- Clean the email
+- Detect if sender domain is legit or suspicious
+- Classify email into one category
 
-SECOND, evaluate the sender domain:
-- Is it from a real company?
-- Does the domain exist?
-- Is it a common spam domain (gmail/yahoo/outlook for "job offers")?
-- Does it match the company mentioned inside the email?
+Allowed categories:
+1. Newsletter / Marketing Blast
+2. Sales Outreach / Lead Gen
+3. Genuine Job Opportunity
+4. Fake Job Offer / Scam
+5. Personal Message
+6. Support Query
+7. Internal Company Email
+8. Auto-generated / System Notification
+9. Other
 
-THIRD, classify into EXACTLY ONE category:
-
-1. Newsletter / Marketing Blast  
-   - mass mailers, promotions, offers, digest emails  
-   - contains "unsubscribe", "update preferences", tracking pixels
-
-2. Sales Outreach / Lead Gen  
-   - cold outreach  
-   - sales pitch, demo request, SaaS product selling
-
-3. Genuine Job Opportunity  
-   ONLY IF:  
-   - domain is corporate (example: @google.com, @tcs.com)  
-   - message style is formal  
-   - contains JD, compensation range, recruiter signature  
-
-4. Fake Job Offer / Scam  
-   IF:  
-   - sender uses free email (gmail/yahoo) pretending to be a company  
-   - no company domain  
-   - promise very high salary  
-   - asks for money, documents, registration fee  
-
-5. Personal Message  
-   - from an individual  
-   - no marketing  
-   - no sales pitch  
-   - personal conversation style  
-
-6. Customer Support Query  
-   - refund, order issue, complaint, product question  
-   (Your old categories will be handled at reply-generation stage.)
-
-7. Internal Company Email  
-   - if sender shares same domain as the user  
-   - internal communication  
-
-8. Auto-generated / System Notification  
-   - password reset  
-   - login alerts  
-   - shipping updates  
-   - invoices
-
-9. Other  
-   - doesn't fit any above category  
-
-Return output ONLY as JSON:
+Return STRICT JSON only:
 
 {{
-  "category": "<exact_category_name>",
-  "confidence": "<0.00 to 1.00>",
-  "is_legit_company": "<true/false>",
+  "category": "<category>",
+  "confidence": 0.0,
+  "is_legit_company": false,
   "detected_sender_domain": "<domain>",
-  "reason": "<short justification>"
+  "reason": "<short reason>"
 }}
 
-Email Subject: {subject}
-Email Body: {body}
-
-Return ONLY the category name.
+DO NOT RETURN ANY TEXT OUTSIDE JSON.
+Subject: {subject}
+Sender: {sender}
+Body: {body}
 """
-    resp = model.generate_content(prompt)
-    return resp.text.strip()
+
+    response = model.generate_content(prompt).text.strip()
+
+    import json
+    # Try to fix when model wraps JSON in extra text
     try:
-        return json.loads(response)
-    except:
+        # Find first '{' and last '}'
+        start = response.find("{")
+        end = response.rfind("}") + 1
+        clean_json = response[start:end]
+
+        parsed = json.loads(clean_json)
+        return parsed
+
+    except Exception as e:
         return {
             "category": "Other",
-            "confidence": 0.3,
+            "confidence": 0.0,
             "is_legit_company": False,
             "detected_sender_domain": "",
-            "reason": "Could not parse AI response."
+            "reason": f"JSON parsing failed: {str(e)}"
         }
 
 
