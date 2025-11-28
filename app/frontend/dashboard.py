@@ -89,8 +89,9 @@ def main():
             st.subheader("AI Suggested Reply")
             ai_reply = st.text_area(
                 "Edit the AI reply before sending:",
-                row["suggested_reply"],
-                height=200
+                value=row["suggested_reply"],
+                height=200,
+                key=f"reply_box_{row['id']}"
             )
 
             col1, col2 = st.columns(2)
