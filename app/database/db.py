@@ -18,6 +18,34 @@ def init_db():
     create_all_tables(conn)
     conn.close()
 
+def create_temp_oauth_state(state: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT OR IGNORE INTO oauth_state (state, created_at) VALUES (?, datetime('now'))",
+        (state,)
+    )
+    conn.commit()
+    conn.close()
+    
+def consume_oauth_state(state: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    row = cur.execute(
+        "SELECT state FROM oauth_state WHERE state=?",
+        (state,)
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        return False
+
+    cur.execute("DELETE FROM oauth_state WHERE state=?", (state,))
+    conn.commit()
+    conn.close()
+    return True
+
 
 # -----------------------------------
 # EMAIL LOGS

@@ -43,5 +43,12 @@ def create_all_tables(conn):
         sent_at TEXT
     );
 """)
+    
+    cur.execute("""
+CREATE TABLE IF NOT EXISTS oauth_state (
+    state TEXT PRIMARY KEY,
+    created_at TEXT
+);
+""")
 
     conn.commit()
